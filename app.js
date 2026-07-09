@@ -69,14 +69,6 @@
       { id: uid(), action: "switch", value: "" }
     ];
   }
-  function residentCard(label, imgType) {
-    return {
-      id: uid(), name: "常駐", isResident: true, start: null, end: null,
-      chatBarText: "", defaultExpand: true,
-      image: { type: imgType || "blank", label: label || "" },
-      status: "resident", cells: defaultCells()
-    };
-  }
   function sched(name, imgType, start, end, status) {
     return {
       id: uid(), name: name, isResident: false, start: start, end: end,
@@ -85,23 +77,19 @@
     };
   }
   function seedMenus() {
-    var d0 = residentCard("品牌選單", "purple"); d0.name = "品牌選單";
-    var b0 = residentCard("bbb 選單", "green"); b0.name = "bbb 選單";
     return [
       {
         id: "default", type: "default", name: "預設圖文選單",
         schedules: [
-          d0,
           sched("品牌選單 - 寒假", "purple", "2026-01-01T12:00", "2026-01-31T12:00", "expired"),
           sched("bbb 選單 - 暑假", "purple", "2026-07-01T12:00", "2026-08-31T12:00", "active"),
           sched("bbb 選單 - 開學", "purple", "2026-09-01T12:00", "2026-09-30T12:00", "scheduled")
         ]
       },
-      { id: uid(), type: "general", name: "A 選單", schedules: [residentCard("", "blank")] },
+      { id: uid(), type: "general", name: "A 選單", schedules: [] },
       {
         id: uid(), type: "general", name: "B 選單",
         schedules: [
-          b0,
           sched("bbb 選單 - 兒童節檔期", "green", "2026-04-01T12:00", "2026-04-30T12:00", "expired"),
           sched("bbb 選單 - 母親節檔期", "green", "2026-05-01T12:00", "2026-05-31T12:00", "active"),
           sched("bbb 選單 - 父親節檔期", "green", "2026-08-01T12:00", "2026-08-31T12:00", "scheduled"),
@@ -109,7 +97,7 @@
           sched("bbb 選單 - 萬聖節檔期", "green", "2026-10-01T12:00", "2026-10-31T12:00", "scheduled")
         ]
       },
-      { id: uid(), type: "general", name: "C 選單", schedules: [residentCard("", "blank")] }
+      { id: uid(), type: "general", name: "C 選單", schedules: [] }
     ];
   }
 
@@ -201,6 +189,39 @@
       setTimeout(function () { input.focus(); }, 0);
     });
   }
+  function newMenuModal(onConfirm) {
+    openModal(function (box, close) {
+      box.appendChild(h("h3", { text: "新增圖文選單" }));
+      var input = h("input", { class: "text-input", maxlength: 50, placeholder: "請輸入選單名稱" });
+      function submit() {
+        var name = (input.value || "").trim();
+        if (!name) { input.focus(); return; }
+        close(); onConfirm(name);
+      }
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+      box.appendChild(input);
+      box.appendChild(h("div", { class: "modal-actions" },
+        h("button", { class: "btn-ghost", text: "取消", onClick: close }),
+        h("button", { class: "btn-primary", text: "新增", onClick: submit })
+      ));
+      setTimeout(function () { input.focus(); }, 0);
+    });
+  }
+  function reassignApplyModal(menu) {
+    openModal(function (box, close) {
+      box.appendChild(h("h3", { text: "移除所有套用" }));
+      box.appendChild(h("p", { text: "請選擇要將原本套用「" + menu.name + "」的會員改為套用哪個選單？" }));
+      var others = state.menus.filter(function (m) { return m.id !== menu.id; });
+      var sel = h("select", { class: "select-input" });
+      sel.appendChild(h("option", { value: "", text: "請選擇選單" }));
+      others.forEach(function (m) { sel.appendChild(h("option", { value: m.id, text: m.name })); });
+      box.appendChild(sel);
+      box.appendChild(h("div", { class: "modal-actions" },
+        h("button", { class: "btn-ghost", text: "取消", onClick: close }),
+        h("button", { class: "btn-primary", text: "確定", onClick: function () { close(); } })
+      ));
+    });
+  }
 
   /* ---------- menu operations ---------- */
   function nextMenuName() {
@@ -211,8 +232,10 @@
     return "選單 " + Date.now();
   }
   function addMenu() {
-    var m = { id: uid(), type: "general", name: nextMenuName(), schedules: [residentCard("", "blank")] };
-    state.menus.push(m); state.selectedId = m.id; render();
+    newMenuModal(function (name) {
+      var m = { id: uid(), type: "general", name: name, schedules: [] };
+      state.menus.push(m); state.selectedId = m.id; render();
+    });
   }
   function duplicateMenu(id) {
     var src = findMenu(id); if (!src) return;
@@ -265,8 +288,8 @@
     /* left panel */
     var panel = h("div", { class: "panel" });
     panel.appendChild(h("div", {
-      class: "menu-row default " + (state.selectedId === "default" ? "active" : ""),
-      style: { paddingTop: "20px", paddingBottom: "18px" },
+      class: "menu-row " + (state.selectedId === "default" ? "active" : ""),
+      style: { paddingTop: "20px" },
       onClick: function () { state.selectedId = "default"; render(); }
     }, h("span", { class: "menu-name", text: defaultMenu.name })));
     panel.appendChild(h("div", { class: "divider" }));
@@ -283,7 +306,7 @@
           openContextMenu(rect, [
             { label: "重新命名", onClick: function () { renameModal(m.name, function (v) { renameMenu(m.id, (v || "").trim() || m.name); }); } },
             { label: "複製", onClick: function () { duplicateMenu(m.id); } },
-            { label: "移除所有套用", onClick: function () { infoModal("（Prototype 示意）已移除所有套用。"); } },
+            { label: "移除所有套用", onClick: function () { reassignApplyModal(m); } },
             { label: "下載會員資料", onClick: function () { infoModal("（Prototype 示意）開始下載會員資料。"); } },
             { sep: true },
             { label: "刪除", danger: true, onClick: function () { confirmModal("刪除圖文選單", "確定要刪除「" + m.name + "」嗎？此動作無法復原。", true, function () { deleteMenu(m.id); }); } }
@@ -299,7 +322,7 @@
     /* content */
     var content = h("div", { class: "content" });
     content.appendChild(h("div", { class: "content-head" },
-      h("h2", { text: "{文章狀態}" }),
+      h("h2", { text: selected.name }),
       h("button", { class: "btn-primary", text: "＋ 新增排程", onClick: function () { openEditor(selected.id, null); } })
     ));
 
@@ -478,7 +501,7 @@
       if (cell.action === "switch") {
         var sel = h("select", { class: "select-input" });
         sel.appendChild(h("option", { value: "", text: "請選擇選單" }));
-        state.menus.forEach(function (m) {
+        state.menus.filter(function (mm) { return mm.id !== menu.id; }).forEach(function (m) {
           var opt = h("option", { value: m.id, text: m.name });
           if (cell.value === m.id) opt.selected = true;
           sel.appendChild(opt);
