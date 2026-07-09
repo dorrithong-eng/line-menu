@@ -115,9 +115,14 @@
   /* ---------- reusable pieces ---------- */
   function menuImage(image, sizeClass) {
     var type = (image && image.type) || "blank";
-    var wrap = h("div", { class: "menu-img " + type + " " + (sizeClass || "") });
-    if (type !== "blank") wrap.appendChild(h("div", { class: "corner" }));
-    wrap.appendChild(h("span", { class: "label", text: (image && image.label) || "" }));
+    var hasSrc = !!(image && image.src);
+    var wrap = h("div", { class: "menu-img " + type + " " + (sizeClass || "") + (hasSrc ? " has-img" : "") });
+    if (hasSrc) {
+      wrap.appendChild(h("img", { class: "menu-img-photo", src: image.src, alt: "" }));
+    } else {
+      if (type !== "blank") wrap.appendChild(h("div", { class: "corner" }));
+      wrap.appendChild(h("span", { class: "label", text: (image && image.label) || "" }));
+    }
     return wrap;
   }
   function badge(status) { return h("span", { class: "badge " + status, text: STATUS_LABEL[status] }); }
@@ -349,9 +354,9 @@
             }
           }));
         }
-        var imgArea = (s.image.type === "blank" && !s.image.label)
+        var imgArea = (s.image.type === "blank" && !s.image.label && !s.image.src)
           ? h("div", { class: "menu-img blank card-size" })
-          : menuImage({ type: s.image.type, label: s.isResident ? s.image.label : s.name }, "card-size");
+          : menuImage({ type: s.image.type, label: s.isResident ? s.image.label : s.name, src: s.image.src }, "card-size");
         grid.appendChild(h("div", { class: "sched-card" },
           head,
           h("div", { class: "card-img-wrap" }, imgArea),
@@ -460,8 +465,28 @@
       ));
 
     /* ----- 選單設定 (image + cells) ----- */
-    var previewImg = menuImage({ type: draft.image.type, label: draft.name || draft.image.label }, "");
-    var previewWrap = h("div", { class: "editor-preview-img" }, previewImg);
+    var previewWrap = h("div", { class: "editor-preview-img" });
+    var fileInput = h("input", { type: "file", accept: "image/*", style: { display: "none" } });
+    fileInput.addEventListener("change", function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function (e) { draft.image.src = e.target.result; renderPreview(); };
+      reader.readAsDataURL(f);
+      fileInput.value = "";
+    });
+    function renderPreview() {
+      previewWrap.innerHTML = "";
+      previewWrap.appendChild(menuImage({ type: draft.image.type, label: draft.name || draft.image.label, src: draft.image.src }, ""));
+      var actions = h("div", { class: "img-actions" },
+        h("button", { type: "button", class: "btn-ghost", text: draft.image.src ? "更換圖片" : "上傳圖片", onClick: function () { fileInput.click(); } }));
+      if (draft.image.src) {
+        actions.appendChild(h("button", { type: "button", class: "btn-ghost", text: "移除圖片", onClick: function () { draft.image.src = null; renderPreview(); } }));
+      }
+      previewWrap.appendChild(actions);
+      previewWrap.appendChild(fileInput);
+    }
+    renderPreview();
 
     var cellsContainer = h("div");
     function rebuildCells() {
